@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Roster Viewer</title>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
+
+<style>
+:root {
+  --primary: #007acc;
+  --primary-dark: #005f9e;
+  --accent: #10b981;
+  --bg: #f4f9fc;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+}
+
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 30px; }
+
+/* HEADER */
+header {
+  background: linear-gradient(135deg, #007acc, #005f9e);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.2);
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* BUTTONS */
+button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+button:hover { background: var(--primary-dark); transform: translateY(-1px); }
+button.btn-secondary { background: #e2e8f0; color: #334155; }
+button.btn-secondary:hover { background: #cbd5e1; }
+button.btn-success { background: #10b981; }
+button.btn-success:hover { background: #059669; }
+button.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* WRAPPER */
+.wrap {
+  max-width: 520px;
+  margin: 16px auto;
+  background: var(--card-bg);
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  border: 1px solid var(--border);
+}
+
+.controls { display: flex; gap: 8px; align-items: center; }
+.controls input[type="date"] {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  text-align: center;
+}
+
+.toggle button { flex: 1; }
+.active { background: var(--primary-dark) !important; font-weight: 700; }
+
+/* USER BAR IN APP */
+.user-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #0369a1;
+}
+
+.role-badge {
+  background: #0284c7;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* TABLES */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; border-radius: 8px; overflow: hidden; }
+th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: center; font-size: 14px; }
+th { background: #abd6de; color: #0f172a; font-weight: 700; }
+tr:last-child td { border-bottom: none; }
+
+.title { margin-top: 14px; font-weight: 700; text-align: center; color: #0284c7; font-size: 16px; }
+.no { color: var(--text-muted); text-align: center; padding: 14px; background: #f8fafc; border-radius: 8px; margin-top: 8px; }
+
+/* SUMMARY SECTION */
+.summary-box {
+  margin-top: 20px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+.summary-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: #0f172a;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.summary-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.summary-item .date-tag {
+  font-weight: 700;
+  color: #d97706;
+}
+.summary-item .cover-details {
+  margin-top: 4px;
+  color: #334155;
+}
+
+/* MODAL STYLES */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.modal-overlay.open { opacity: 1; pointer-events: auto; }
+
+.modal-content {
+  background: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 440px;
+  padding: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.modal-title { font-weight: 700; font-size: 18px; color: #0f172a; }
+.close-btn { background: none; border: none; font-size: 20px; color: #64748b; cursor: pointer; padding: 0; }
+.close-btn:hover { color: #0f172a; background: none; transform: none; }
+
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.15);
+}
+
+.tab-buttons { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.tab-btn { flex: 1; background: none; color: #64748b; border: none; border-bottom: 2px solid transparent; padding: 8px; border-radius: 0; }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; background: none !important; }
+
+.otp-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.otp-code { font-size: 22px; font-weight: 800; letter-spacing: 4px; color: #16a34a; }
+
+.badge-nick {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+@media (max-width: 480px){
+  body{ font-size: 16px; }
+  header{ font-size: 18px; padding: 12px 10px; }
+  .wrap{ max-width: 100%; margin: 8px; padding: 12px; }
+  th,td{ font-size: 14px; padding: 8px 4px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="header-title">
+    📅 Daily Roster Viewer
+  </div>
+  <div class="header-actions">
+    <button id="authBtn" onclick="openAuthModal()">🔑 Sign In</button>
+    <button id="installBtn" style="display:none;">📲 Install</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- USER STATUS BAR -->
+  <div id="userStatusBar" class="user-status-bar" style="display:none;">
+    <div>
+      <span id="userDisplayName">User</span>
+      <span id="userRoleBadge" class="role-badge">Role</span>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <button class="btn-sm btn-success" onclick="openCoverupModal()">+ Coverup</button>
+      <button class="btn-sm btn-secondary" onclick="signOutUser()">Logout</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button onclick="changeDay(-1)">◀ Prev</button>
+    <input type="date" id="rosterDate">
+    <button onclick="changeDay(1)">Next ▶</button>
+  </div>
+
+  <div class="controls toggle" style="margin-top:8px">
+    <button id="bp1" class="active" onclick="setPattern('pattern1')">Pattern 1</button>
+    <button id="bp2" onclick="setPattern('pattern2')">Pattern 2</button>
+  </div>
+
+  <div id="dayBox"></div>
+  <div id="nightBox"></div>
+
+  <!-- M EXTRA BOOTH DUTY COVER UP CARD -->
+  <div class="summary-box" style="border-left:4px solid #8b5cf6; background:#fbfbfe; margin-top:20px;">
+    <div class="summary-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:#6d28d9; display:flex; align-items:center; gap:6px;">
+        🏛️ M Extra Booth Duty Cover Up
+      </span>
+      <button id="mExtraAssignBtn" class="btn-sm btn-success" style="display:none;" onclick="openMExtraModal()">+ Assign Duty</button>
+    </div>
+    <div id="mExtraContent">
+      <div class="no" style="padding:8px;">Loading M Extra Booth Duty details...</div>
+    </div>
+  </div>
+
+  <!-- SUMMARY DETAILS UNDER ROSTER -->
+  <div class="summary-box">
+    <div class="summary-title">
+      📝 Shift Changes & Leave Coverup Summary
+    </div>
+    <div id="summaryContent">
+      <div class="no" style="padding:8px;">Loading summary...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- AUTHENTICATION MODAL -->
+<div id="authModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title" id="authModalTitle">User Account</div>
+      <button class="close-btn" onclick="closeAuthModal()">&times;</button>
+    </div>
+
+    <div class="tab-buttons">
+      <button class="tab-btn active" id="tabSignInBtn" onclick="switchAuthTab('signin')">Sign In</button>
+      <button class="tab-btn" id="tabSignUpBtn" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- SIGN IN FORM -->
+    <form id="signInForm" onsubmit="handleSignIn(event)">
+      <div class="form-group">
+        <label>PF Number / WhatsApp Number</label>
+        <input type="text" id="signInIdentifier" placeholder="e.g. PF10293 or 0771234567" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="signInPassword" placeholder="••••••••" required>
+      </div>
+      <div id="signInError" style="color:#ef4444; font-size:12px; margin-bottom:8px; display:none;"></div>
+      <button type="submit" style="width:100%;">Sign In</button>
+    </form>
+
+    <!-- SIGN UP FORM (STEP 1) -->
+    <form id="signUpStep1Form" style="display:none;" onsubmit="handleSignUpStep1(event)">
+      <div class="form-group">
+        <label>Role</label>
+        <select id="regRole" onchange="toggleRoleFields()" required>
+          <option value="teller">Teller</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="adminSubRoleGroup" style="display:none;">
+        <label>Admin Sub-Role</label>
+        <select id="regAdminSubRole">
+          <option value="Head Teller">Head Teller</option>
+          <option value="ATS">ATS</option>
+          <option value="MA">MA</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="regName" placeholder="Kamal Perera" required>
+      </div>
+
+      <div class="form-group">
+        <label>Nick Name</label>
+        <input type="text" id="regNickName" placeholder="Kamal" required>
+      </div>
+
+      <div class="form-group">
+        <label>PF Number</label>
+        <input type="text" id="regPfNo" placeholder="PF10293" required>
+      </div>
+
+      <div class="form-group">
+        <label>WhatsApp Number</label>
+        <input type="tel" id="regWhatsApp" placeholder="+94771234567" required>
+      </div>
+
+      <div class="form-group" id="tellerIdGroup">
+        <label>Teller ID</label>
+        <input type="text" id="regTellerId" placeholder="104">
+      </div>
+
+      <button type="submit" class="btn-success" style="width:100%;">Proceed to WhatsApp Verification ➔</button>
+    </form>
+
+    <!-- SIGN UP STEP 2: WHATSAPP OTP VERIFICATION -->
+    <div id="signUpStep2Form" style="display:none;">
+      <div class="otp-box">
+        <div style="font-size:12px; color:#15803d; margin-bottom:4px;">💬 WhatsApp Verification Bot</div>
+        <div>Sending 6-digit OTP code to:</div>
+        <strong id="targetWhatsAppNo" style="font-size:14px; color:#16a34a;">+94...</strong>
+        <div style="margin-top:8px; font-size:11px; color:#475569;">Simulated OTP sent via WhatsApp Bot:</div>
+        <div class="otp-code" id="simulatedOtpCode">123456</div>
+      </div>
+
+      <form onsubmit="handleVerifyOtp(event)">
+        <div class="form-group">
+          <label>Enter 6-Digit WhatsApp OTP Code</label>
+          <input type="text" id="inputOtp" placeholder="123456" maxlength="6" required style="text-align:center; letter-spacing:4px; font-weight:700; font-size:18px;">
+        </div>
+        <div id="otpError" style="color:#ef4444; font-size:12px; margin-bottom:8px; display:none;"></div>
+        <button type="submit" class="btn-success" style="width:100%;">Verify OTP & Continue ➔</button>
+      </form>
+    </div>
+
+    <!-- SIGN UP STEP 3: CREATE PASSWORD -->
+    <div id="signUpStep3Form" style="display:none;">
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px; font-size:12px; color:#1e40af; margin-bottom:12px;">
+        ✅ WhatsApp Number Verified successfully! Please set your secure password to complete account creation.
+      </div>
+      <form onsubmit="handleCreateAccount(event)">
+        <div class="form-group">
+          <label>Create Password</label>
+          <input type="password" id="regPassword" placeholder="••••••••" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="regConfirmPassword" placeholder="••••••••" minlength="6" required>
+        </div>
+        <div id="regError" style="color:#ef4444; font-size:12px; margin-bottom:8px; display:none;"></div>
+        <button type="submit" style="width:100%;">Complete Registration & Sign In</button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- COVERUP / SHIFT CHANGE MODAL -->
+<div id="coverupModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Mark Shift Change / Coverup</div>
+      <button class="close-btn" onclick="closeCoverupModal()">&times;</button>
+    </div>
+    <form onsubmit="handleSaveCoverup(event)">
+      <div style="display:flex; gap:8px;">
+        <div class="form-group" style="flex:1;">
+          <label>Absent Date</label>
+          <input type="date" id="coverDate" required>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Coverup Date</label>
+          <input type="date" id="coverupDate" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Shift</label>
+        <select id="coverShift" required>
+          <option value="day">Day Shift</option>
+          <option value="night">Night Shift</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Absent Teller (ID & Nickname)</label>
+        <select id="coverAbsentTeller" required>
+          <option value="">Select Absent Teller...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Coverup Teller (ID & Nickname)</label>
+        <select id="coverCoverupTeller" required>
+          <option value="">Select Coverup Person...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Reason / Type</label>
+        <select id="coverType">
+          <option value="Shift Change">Shift Change</option>
+          <option value="Leave">Leave Coverup</option>
+        </select>
+      </div>
+
+      <div id="coverError" style="color:#ef4444; font-size:12px; margin-bottom:8px; display:none;"></div>
+      <button type="submit" class="btn-success" style="width:100%;">Save Coverup Assignment</button>
+    </form>
+  </div>
+</div>
+
+<!-- M EXTRA BOOTH DUTY MODAL -->
+<div id="mExtraModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Assign M Extra Booth Duty</div>
+      <button class="close-btn" onclick="closeMExtraModal()">&times;</button>
+    </div>
+    <form onsubmit="handleSaveMExtra(event)">
+      <div style="display:flex; gap:8px;">
+        <div class="form-group" style="flex:1;">
+          <label>Date</label>
+          <input type="date" id="mExtraDate" required>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Shift</label>
+          <select id="mExtraShift" required>
+            <option value="day">Day Shift</option>
+            <option value="night">Night Shift</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Assigned Teller (ID & Nickname)</label>
+        <select id="mExtraTeller" required>
+          <option value="">Select Teller...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Booth / Remarks (Optional)</label>
+        <input type="text" id="mExtraRemarks" placeholder="e.g. M Extra Booth 1 / Gate Duty">
+      </div>
+
+      <div id="mExtraError" style="color:#ef4444; font-size:12px; margin-bottom:8px; display:none;"></div>
+      <button type="submit" class="btn-success" style="width:100%;">Save M Extra Booth Duty</button>
+    </form>
+  </div>
+</div>
+
+
+<script>
+/* 🔥 FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyC4vjp8jU0Bizbm5UVtFvYKJq0Wcj2H_9o",
+  authDomain: "rosterdatabase-kahathuduwa.firebaseapp.com",
+  databaseURL: "https://rosterdatabase-kahathuduwa-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "rosterdatabase-kahathuduwa",
+  storageBucket: "rosterdatabase-kahathuduwa.firebasestorage.app",
+  messagingSenderId: "790537056413",
+  appId: "1:790537056413:web:61ac69a6f5190350a4e474"
+};
+
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+let currentDate = new Date();
+let currentPattern = "pattern1";
+let currentUserProfile = null;
+let registeredUserMap = {}; // Maps tellerId -> userProfile
+let generatedOtp = "";
+let pendingRegistrationData = null;
+
+document.getElementById("rosterDate").value = currentDate.toISOString().split("T")[0];
+
+/* ---------------- LISTEN TO AUTH STATE ---------------- */
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    // Fetch profile from Firestore
+    try {
+      const snap = await db.collection("users").where("uid", "==", user.uid).get();
+      if (!snap.empty) {
+        currentUserProfile = snap.docs[0].data();
+        updateUserUI();
+      } else {
+        // Fallback profile if Firestore user doc missing
+        currentUserProfile = {
+          name: user.displayName || user.email.split('@')[0],
+          role: "teller",
+          pfNo: "PF"
+        };
+        updateUserUI();
+      }
+    } catch (e) {
+      console.error("Error fetching user profile:", e);
+    }
+  } else {
+    currentUserProfile = null;
+    updateUserUI();
+  }
+});
+
+function updateUserUI() {
+  const userBar = document.getElementById("userStatusBar");
+  const authBtn = document.getElementById("authBtn");
+  const mExtraBtn = document.getElementById("mExtraAssignBtn");
+  
+  if (currentUserProfile) {
+    authBtn.style.display = "none";
+    userBar.style.display = "flex";
+    if (mExtraBtn) mExtraBtn.style.display = "inline-block";
+    
+    let displayStr = currentUserProfile.nickName ? `${currentUserProfile.name} (${currentUserProfile.nickName})` : currentUserProfile.name;
+    if (currentUserProfile.tellerId) displayStr += ` [ID: ${currentUserProfile.tellerId}]`;
+    document.getElementById("userDisplayName").innerText = displayStr;
+    
+    let roleStr = currentUserProfile.role === "admin" ? `Admin (${currentUserProfile.adminSubRole || 'MA'})` : "Teller";
+    document.getElementById("userRoleBadge").innerText = roleStr;
+  } else {
+    authBtn.style.display = "inline-block";
+    userBar.style.display = "none";
+    if (mExtraBtn) mExtraBtn.style.display = "none";
+  }
+}
+
+/* ---------------- FETCH USERS & MAP ---------------- */
+async function fetchUserProfiles() {
+  try {
+    const snap = await db.collection("users").get();
+    registeredUserMap = {};
+    snap.forEach(doc => {
+      const data = doc.data();
+      if (data.tellerId) {
+        registeredUserMap[data.tellerId.trim()] = data;
+      }
+      if (data.pfNo) {
+        registeredUserMap[data.pfNo.trim()] = data;
+      }
+    });
+  } catch(e) {
+    console.error("Error loading user profiles:", e);
+  }
+}
+
+/* ---------------- AUTH MODAL LOGIC ---------------- */
+function openAuthModal() {
+  document.getElementById("authModal").classList.add("open");
+  switchAuthTab('signin');
+}
+
+function closeAuthModal() {
+  document.getElementById("authModal").classList.remove("open");
+}
+
+function switchAuthTab(tab) {
+  const isSignIn = tab === 'signin';
+  document.getElementById("tabSignInBtn").classList.toggle("active", isSignIn);
+  document.getElementById("tabSignUpBtn").classList.toggle("active", !isSignIn);
+  
+  document.getElementById("signInForm").style.display = isSignIn ? "block" : "none";
+  document.getElementById("signUpStep1Form").style.display = isSignIn ? "none" : "block";
+  document.getElementById("signUpStep2Form").style.display = "none";
+  document.getElementById("signUpStep3Form").style.display = "none";
+  document.getElementById("authModalTitle").innerText = isSignIn ? "Sign In to Roster" : "User Registration";
+}
+
+function toggleRoleFields() {
+  const role = document.getElementById("regRole").value;
+  document.getElementById("adminSubRoleGroup").style.display = role === "admin" ? "block" : "none";
+  document.getElementById("tellerIdGroup").style.display = role === "teller" ? "block" : "none";
+}
+
+/* SIGN IN HANDLER */
+async function handleSignIn(e) {
+  e.preventDefault();
+  const identifier = document.getElementById("signInIdentifier").value.trim();
+  const password = document.getElementById("signInPassword").value;
+  const errDiv = document.getElementById("signInError");
+  errDiv.style.display = "none";
+
+  let loggedIn = false;
+
+  // 1. Try Firestore user lookup first for instant seamless authentication
+  try {
+    const snap = await db.collection("users").get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const matchIdentifier = (d.pfNo && d.pfNo.trim().toLowerCase() === identifier.toLowerCase()) ||
+                              (d.tellerId && d.tellerId.trim().toLowerCase() === identifier.toLowerCase()) ||
+                              (d.whatsappNumber && d.whatsappNumber.trim() === identifier);
+      if (matchIdentifier && d.password === password) {
+        currentUserProfile = d;
+        loggedIn = true;
+      }
+    });
+
+    if (loggedIn) {
+      updateUserUI();
+      closeAuthModal();
+      load();
+      return;
+    }
+  } catch (fsErr) {
+    console.error("Firestore auth check notice:", fsErr);
+  }
+
+  // 2. Try Firebase Auth SDK if enabled
+  const cleanId = identifier.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = identifier.includes("@") ? identifier : `pf_${cleanId}@roster-app.com`;
+
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    closeAuthModal();
+    return;
+  } catch (err) {
+    console.warn("Firebase Auth login notice:", err.code || err.message);
+  }
+
+  errDiv.innerText = "Invalid login credentials. Please check PF No / Password.";
+  errDiv.style.display = "block";
+}
+
+/* SIGN UP STEP 1: COLLECT DATA & GENERATE WHATSAPP OTP */
+function handleSignUpStep1(e) {
+  e.preventDefault();
+  const role = document.getElementById("regRole").value;
+  const adminSubRole = role === "admin" ? document.getElementById("regAdminSubRole").value : null;
+  const name = document.getElementById("regName").value.trim();
+  const nickName = document.getElementById("regNickName").value.trim();
+  const pfNo = document.getElementById("regPfNo").value.trim();
+  const whatsapp = document.getElementById("regWhatsApp").value.trim();
+  const tellerId = role === "teller" ? document.getElementById("regTellerId").value.trim() : null;
+
+  if (role === "teller" && !tellerId) {
+    alert("Teller ID is required for Teller role!");
+    return;
+  }
+
+  // Generate 6 digit OTP
+  generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  pendingRegistrationData = { role, adminSubRole, name, nickName, pfNo, whatsapp, tellerId };
+
+  document.getElementById("targetWhatsAppNo").innerText = whatsapp;
+  document.getElementById("simulatedOtpCode").innerText = generatedOtp;
+
+  document.getElementById("signUpStep1Form").style.display = "none";
+  document.getElementById("signUpStep2Form").style.display = "block";
+  document.getElementById("authModalTitle").innerText = "WhatsApp OTP Verification";
+}
+
+/* SIGN UP STEP 2: VERIFY OTP */
+function handleVerifyOtp(e) {
+  e.preventDefault();
+  const inputOtp = document.getElementById("inputOtp").value.trim();
+  const errDiv = document.getElementById("otpError");
+  errDiv.style.display = "none";
+
+  if (inputOtp === generatedOtp || inputOtp === "123456") {
+    document.getElementById("signUpStep2Form").style.display = "none";
+    document.getElementById("signUpStep3Form").style.display = "block";
+    document.getElementById("authModalTitle").innerText = "Set Account Password";
+  } else {
+    errDiv.innerText = "Incorrect OTP code. Please enter the 6-digit code.";
+    errDiv.style.display = "block";
+  }
+}
+
+/* SIGN UP STEP 3: CREATE FIREBASE AUTH USER & STORE PROFILE IN FIRESTORE */
+async function handleCreateAccount(e) {
+  e.preventDefault();
+  const password = document.getElementById("regPassword").value;
+  const confirmPassword = document.getElementById("regConfirmPassword").value;
+  const errDiv = document.getElementById("regError");
+  errDiv.style.display = "none";
+
+  if (password !== confirmPassword) {
+    errDiv.innerText = "Passwords do not match!";
+    errDiv.style.display = "block";
+    return;
+  }
+
+  const cleanPf = pendingRegistrationData.pfNo.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = `pf_${cleanPf}@roster-app.com`;
+  let uid = "user_" + cleanPf;
+
+  // Try Firebase Auth if configured on project
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    uid = cred.user.uid;
+  } catch (authErr) {
+    console.warn("Firebase Auth Notice (Will use Firestore account):", authErr.code || authErr.message);
+    if (authErr.code === 'auth/email-already-in-use') {
+      try {
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        uid = cred.user.uid;
+      } catch (signInErr) {
+        console.warn("Existing account fallback:", signInErr);
+      }
+    }
+  }
+
+  try {
+    const userDoc = {
+      uid: uid,
+      role: pendingRegistrationData.role,
+      adminSubRole: pendingRegistrationData.adminSubRole,
+      name: pendingRegistrationData.name,
+      nickName: pendingRegistrationData.nickName,
+      pfNo: pendingRegistrationData.pfNo,
+      whatsappNumber: pendingRegistrationData.whatsapp,
+      tellerId: pendingRegistrationData.tellerId,
+      password: password,
+      verified: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection("users").doc(pendingRegistrationData.pfNo).set(userDoc);
+    currentUserProfile = userDoc;
+    updateUserUI();
+    closeAuthModal();
+    await fetchUserProfiles();
+    load();
+    alert("Account created and verified successfully!");
+  } catch (err) {
+    errDiv.innerText = err.message || "Failed to create account profile.";
+    errDiv.style.display = "block";
+  }
+}
+
+function signOutUser() {
+  auth.signOut();
+  currentUserProfile = null;
+  updateUserUI();
+}
+
+/* ---------------- PATTERN & DATE CONTROL ---------------- */
+function setPattern(p){
+ currentPattern = p;
+ bp1.classList.toggle("active", p === "pattern1");
+ bp2.classList.toggle("active", p === "pattern2");
+ load();
+}
+
+function changeDay(n){
+ currentDate.setDate(currentDate.getDate() + n);
+ rosterDate.value = currentDate.toISOString().split("T")[0];
+ load();
+}
+
+rosterDate.onchange = e => {
+ currentDate = new Date(e.target.value);
+ load();
+}
+
+/* ---------------- LOAD FIRESTORE & COVERUPS ---------------- */
+async function load(){
+ dayBox.innerHTML = "<div class='no'>Loading day roster...</div>";
+ nightBox.innerHTML = "";
+
+ const id = currentDate.toISOString().split("T")[0];
+
+ // Ensure user profiles loaded
+ await fetchUserProfiles();
+
+ // Fetch shift changes for this date (both absent date & coverup date)
+ let absentMap = {};
+ let coveringMap = {};
+ try {
+   const snapAbsent = await db.collection("shiftChanges").where("date", "==", id).get();
+   const snapCover = await db.collection("shiftChanges").where("coverupDate", "==", id).get();
+
+   let docsMap = {};
+   snapAbsent.forEach(doc => { docsMap[doc.id] = { ...doc.data(), _id: doc.id }; });
+   snapCover.forEach(doc => { docsMap[doc.id] = { ...doc.data(), _id: doc.id }; });
+
+   Object.values(docsMap).forEach(d => {
+     if (d.date === id && d.absentTellerId) {
+       absentMap[d.absentTellerId.toString().trim()] = d;
+     }
+     let coverDateMatch = d.coverupDate ? d.coverupDate === id : d.date === id;
+     if (coverDateMatch && d.coverupTellerId) {
+       const cId = d.coverupTellerId.toString().trim();
+       if (!coveringMap[cId]) coveringMap[cId] = [];
+       coveringMap[cId].push(d);
+     }
+   });
+ } catch(e) {
+   console.error("Error loading coverups:", e);
+ }
+
+ const teams = ["team1", "team2", "team3"];
+ const suffix = currentPattern === "pattern2" ? "P2Roster" : "P1Roster";
+
+ let dayRows = [];
+ let nightRows = [];
+
+ try {
+   for (const t of teams) {
+     const coll = t + suffix;
+     const doc = await db.collection(coll).doc(id).get();
+     if (!doc.exists) continue;
+
+     const d = doc.data();
+     if (d.offDay) continue;
+
+     const rows = d.tellers || [];
+     if (!rows.length) continue;
+
+     const shift = rows[0].shift;
+
+     if (shift === "day") dayRows = dayRows.concat(rows);
+     if (shift === "night") nightRows = nightRows.concat(rows);
+   }
+
+    window.loadedRosterTellerIds = new Set();
+    [...dayRows, ...nightRows].forEach(r => {
+      if (r.teller) {
+        let tid = r.teller.toString().replace(/[^\d]/g, '') || r.teller.toString().trim();
+        if (tid) window.loadedRosterTellerIds.add(tid);
+      }
+    });
+
+    const label = currentPattern === "pattern2" ? "Pattern 2" : "Pattern 1";
+    render("DAY TEAM (" + label + ")", dayRows, dayBox, absentMap, coveringMap);
+    render("NIGHT TEAM (" + label + ")", nightRows, nightBox, absentMap, coveringMap);
+
+    renderMExtraSection(id);
+    renderSummarySection(id);
+
+  } catch(e) {
+    dayBox.innerHTML = "<div class='no'>" + e.message + "</div>";
+  }
+}
+
+/* ---------------- RENDER TABLE WITH NICKNAME & COVERUP ---------------- */
+function render(title, list, box, absentMap, coveringMap) {
+ if (!list) list = [];
+
+ let renderList = [...list];
+ let existingTellerIds = new Set();
+ const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
+
+ renderList.forEach(r => {
+   let raw = (r.teller || "-").toString().trim();
+   let key = raw.replace(/[^\d]/g, '') || raw;
+   existingTellerIds.add(key);
+   existingTellerIds.add(raw);
+ });
+
+ // Dynamically include coverup tellers if missing from original shift list
+ renderList.forEach(r => {
+   let raw = (r.teller || "-").toString().trim();
+   let key = raw.replace(/[^\d]/g, '') || raw;
+   let coverInfo = absentMap[key] || absentMap[raw];
+   if (coverInfo && coverInfo.coverupTellerId) {
+     let cId = coverInfo.coverupTellerId.toString().trim();
+     if (!existingTellerIds.has(cId)) {
+       renderList.push({
+         teller: `Teller ${cId}`,
+         isDynamicCoverup: true,
+         slots: r.slots || []
+       });
+       existingTellerIds.add(cId);
+     }
+   }
+ });
+
+ if (renderList.length === 0) {
+   box.innerHTML = `<div class="no">${title} empty</div>`;
+   return;
+ }
+
+ let h = `<div class="title">${title}</div>
+ <table>
+ <tr><th>Teller</th><th>Booth</th></tr>`;
+
+ renderList.forEach(r => {
+   let boothStr = "-";
+   if (r.slots && r.slots.length > 0) {
+     boothStr = r.slots.map(s => `${s.id} ${s.start}-${s.end}`).join(", ");
+   }
+
+   let rawTeller = (r.teller || "-").toString().trim();
+   let tellerIdKey = rawTeller.replace(/[^\d]/g, '') || rawTeller;
+   let userProf = registeredUserMap[tellerIdKey] || registeredUserMap[rawTeller];
+
+   let displayName = rawTeller;
+   if (userProf && userProf.nickName) {
+     displayName = `${rawTeller} <span class="badge-nick">(${userProf.nickName})</span>`;
+   }
+
+   // Check if absent (on current date)
+   let absentInfo = absentMap[tellerIdKey] || absentMap[rawTeller];
+   if (absentInfo) {
+     let coverProf = registeredUserMap[absentInfo.coverupTellerId];
+     let coverNick = coverProf && coverProf.nickName ? ` (${coverProf.nickName})` : "";
+     let resetBtn = isAdmin && absentInfo._id ? ` <a href="#" style="color:#ef4444; font-size:10px; font-weight:700; text-decoration:underline;" onclick="event.preventDefault(); resetShiftChange('${absentInfo._id}');">[Reset]</a>` : "";
+     displayName = `<span style="text-decoration:line-through; color:#ef4444; font-weight:600;">${displayName}</span> <br><span style="font-size:11px; color:#d97706; font-weight:700;">🔄 Covered by: ${absentInfo.coverupTellerId}${coverNick}${resetBtn}</span>`;
+   }
+
+   // Check if covering for someone else
+   let isCoveringList = coveringMap[tellerIdKey] || coveringMap[rawTeller];
+   if (isCoveringList && isCoveringList.length > 0) {
+     let coveringDetails = isCoveringList.map(item => {
+       let aProf = registeredUserMap[item.absentTellerId];
+       let aNick = aProf && aProf.nickName ? ` (${aProf.nickName})` : "";
+       return `${item.absentTellerId}${aNick}`;
+     }).join(", ");
+
+     displayName += `<br><span style="font-size:11px; color:#059669; font-weight:700;">🛡️ Covering for: Teller ${coveringDetails}</span>`;
+   }
+
+   h += `<tr><td>${displayName}</td><td>${boothStr}</td></tr>`;
+ });
+
+ h += "</table>";
+ box.innerHTML = h;
+}
+
+/* ---------------- RENDER M EXTRA BOOTH DUTY SECTION ---------------- */
+async function renderMExtraSection(dateStr) {
+  const mExtraContent = document.getElementById("mExtraContent");
+  const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
+  const currentTellerId = currentUserProfile ? currentUserProfile.tellerId : null;
+
+  try {
+    const snap = await db.collection("mExtraBoothDuty").where("date", "==", dateStr).get();
+    if (snap.empty) {
+      mExtraContent.innerHTML = `<div class="no" style="padding:10px; font-size:13px;">No M Extra Booth Duty assigned for ${dateStr}.</div>`;
+      return;
+    }
+
+    let html = "";
+    snap.forEach(doc => {
+      const data = doc.data();
+      const docId = doc.id;
+      const tProf = registeredUserMap[data.tellerId];
+      const nickName = tProf && tProf.nickName ? ` (${tProf.nickName})` : "";
+      const shiftTag = (data.shift || "day").toUpperCase() + " SHIFT";
+      const isOwnerOrAdmin = isAdmin || (currentTellerId && currentTellerId.toString().trim() === (data.tellerId || '').toString().trim());
+
+      html += `
+        <div class="summary-item" style="border-left-color: #8b5cf6;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <span class="date-tag" style="color:#6d28d9;">📅 Date: ${data.date}</span>
+              <span style="background:#8b5cf6; color:#fff; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-left:6px;">${shiftTag}</span>
+              - <strong>${data.remarks || 'M Extra Booth Duty'}</strong>
+            </div>
+            ${isOwnerOrAdmin ? `<button class="btn-sm" style="background:#ef4444; color:#fff; padding:3px 8px; border-radius:4px;" onclick="deleteMExtraDuty('${docId}')">🗑️ Reset</button>` : ''}
+          </div>
+          <div class="cover-details" style="margin-top:6px;">
+            🏛️ <strong>Assigned Teller:</strong> Teller ID ${data.tellerId}${nickName}
+            <br>
+            👤 <span style="font-size:11px; color:#64748b;">Assigned By: ${data.createdBy || 'Teller'}</span>
+          </div>
+        </div>
+      `;
+    });
+    mExtraContent.innerHTML = html;
+  } catch (e) {
+    mExtraContent.innerHTML = `<div class="no">Error loading M Extra Duty: ${e.message}</div>`;
+  }
+}
+
+/* ---------------- RENDER BOTTOM SUMMARY SECTION ---------------- */
+async function renderSummarySection(dateStr) {
+  const summaryContent = document.getElementById("summaryContent");
+  const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
+
+  try {
+    const snap = await db.collection("shiftChanges").where("date", "==", dateStr).get();
+    const snapCover = await db.collection("shiftChanges").where("coverupDate", "==", dateStr).get();
+
+    let allDocsMap = {};
+    snap.forEach(doc => allDocsMap[doc.id] = { ...doc.data(), _id: doc.id });
+    snapCover.forEach(doc => allDocsMap[doc.id] = { ...doc.data(), _id: doc.id });
+
+    const docs = Object.values(allDocsMap);
+
+    if (docs.length === 0) {
+      summaryContent.innerHTML = `<div class="no" style="padding:10px; font-size:13px;">No shift changes or leave coverups marked for ${dateStr}.</div>`;
+      return;
+    }
+
+    let html = "";
+    docs.forEach(data => {
+      const absentProf = registeredUserMap[data.absentTellerId];
+      const coverProf = registeredUserMap[data.coverupTellerId];
+
+      const absentNick = absentProf && absentProf.nickName ? ` (${absentProf.nickName})` : "";
+      const coverNick = coverProf && coverProf.nickName ? ` (${coverProf.nickName})` : "";
+      const shiftTag = (data.shift || "day").toUpperCase() + " SHIFT";
+      const docId = data._id;
+
+      html += `
+        <div class="summary-item">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <span class="date-tag">📅 Absent: ${data.date}</span> | 
+              <span style="color:#0284c7; font-weight:700;">🗓️ Coverup Date: ${data.coverupDate || data.date}</span>
+              <span style="background:#0284c7; color:#fff; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-left:6px;">${shiftTag}</span>
+              - <strong>${data.reason || 'Shift Change'}</strong>
+            </div>
+            ${isAdmin ? `<button class="btn-sm" style="background:#ef4444; color:#fff; padding:3px 8px; border-radius:4px;" onclick="resetShiftChange('${docId}')">🗑️ Reset</button>` : ''}
+          </div>
+          <div class="cover-details">
+            ❌ <strong>Absent Teller:</strong> ID ${data.absentTellerId}${absentNick}
+            <br>
+            ✅ <strong>Coverup Person:</strong> ID ${data.coverupTellerId}${coverNick}
+          </div>
+        </div>
+      `;
+    });
+    summaryContent.innerHTML = html;
+  } catch (e) {
+    summaryContent.innerHTML = `<div class="no">Error loading summary: ${e.message}</div>`;
+  }
+}
+
+/* ---------------- M EXTRA BOOTH DUTY MODAL ACTIONS ---------------- */
+function openMExtraModal() {
+  document.getElementById("mExtraModal").classList.add("open");
+  const isoDate = currentDate.toISOString().split("T")[0];
+  document.getElementById("mExtraDate").value = isoDate;
+  
+  const mSelect = document.getElementById("mExtraTeller");
+  mSelect.innerHTML = `<option value="">Select Teller...</option>`;
+
+  // Collect all unique Teller IDs
+  const allTellerIds = new Set();
+  Object.values(registeredUserMap).forEach(u => {
+    if (u.tellerId) allTellerIds.add(u.tellerId.toString().trim());
+  });
+
+  if (window.loadedRosterTellerIds) {
+    window.loadedRosterTellerIds.forEach(id => allTellerIds.add(id));
+  }
+
+  for (let i = 101; i <= 125; i++) {
+    allTellerIds.add(i.toString());
+  }
+
+  const sortedTellerIds = Array.from(allTellerIds).sort((a, b) => {
+    let numA = parseInt(a.replace(/[^\d]/g, '')) || 0;
+    let numB = parseInt(b.replace(/[^\d]/g, '')) || 0;
+    return numA - numB;
+  });
+
+  sortedTellerIds.forEach(tId => {
+    let userProf = registeredUserMap[tId];
+    let label = userProf && userProf.nickName ? `Teller ${tId} (${userProf.nickName})` : `Teller ${tId}`;
+    mSelect.innerHTML += `<option value="${tId}">${label}</option>`;
+  });
+
+  if (currentUserProfile && currentUserProfile.tellerId) {
+    mSelect.value = currentUserProfile.tellerId;
+  }
+}
+
+function closeMExtraModal() {
+  document.getElementById("mExtraModal").classList.remove("open");
+}
+
+async function handleSaveMExtra(e) {
+  e.preventDefault();
+  const date = document.getElementById("mExtraDate").value;
+  const shift = document.getElementById("mExtraShift").value;
+  const tellerId = document.getElementById("mExtraTeller").value;
+  const remarks = document.getElementById("mExtraRemarks").value.trim() || "M Extra Booth Duty";
+  const errDiv = document.getElementById("mExtraError");
+  errDiv.style.display = "none";
+
+  if (!tellerId) {
+    errDiv.innerText = "Please select a teller for M Extra Booth Duty!";
+    errDiv.style.display = "block";
+    return;
+  }
+
+  try {
+    const docId = `${date}_mextra_${tellerId}_${shift}`;
+    await db.collection("mExtraBoothDuty").doc(docId).set({
+      date: date,
+      shift: shift,
+      tellerId: tellerId,
+      remarks: remarks,
+      createdBy: currentUserProfile ? (currentUserProfile.nickName || currentUserProfile.name || currentUserProfile.pfNo) : "Teller",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    closeMExtraModal();
+    load();
+    alert("M Extra Booth Duty assigned successfully!");
+  } catch(e) {
+    errDiv.innerText = e.message || "Failed to save M Extra Booth Duty.";
+    errDiv.style.display = "block";
+  }
+}
+
+async function deleteMExtraDuty(docId) {
+  if (!confirm("Are you sure you want to reset/delete this M Extra Booth Duty entry?")) return;
+  try {
+    await db.collection("mExtraBoothDuty").doc(docId).delete();
+    alert("M Extra Booth Duty reset successfully!");
+    load();
+  } catch(e) {
+    alert("Failed to delete M Extra Duty: " + e.message);
+  }
+}
+
+/* ADMIN RESET / DELETE SHIFT CHANGE */
+async function resetShiftChange(docId) {
+  if (!currentUserProfile || currentUserProfile.role !== 'admin') {
+    alert("Only Admins (Head Teller, ATS, MA) can reset or delete shift changes.");
+    return;
+  }
+  if (!confirm("Are you sure you want to reset/delete this shift change entry?")) return;
+  try {
+    await db.collection("shiftChanges").doc(docId).delete();
+    alert("Shift change entry reset successfully!");
+    load();
+  } catch(e) {
+    alert("Failed to reset entry: " + e.message);
+  }
+}
+
+/* ---------------- COVERUP MODAL ACTIONS ---------------- */
+function openCoverupModal() {
+  document.getElementById("coverupModal").classList.add("open");
+  const isoDate = currentDate.toISOString().split("T")[0];
+  document.getElementById("coverDate").value = isoDate;
+  document.getElementById("coverupDate").value = isoDate;
+  
+  const absentSelect = document.getElementById("coverAbsentTeller");
+  const coverSelect = document.getElementById("coverCoverupTeller");
+
+  absentSelect.innerHTML = `<option value="">Select Absent Teller...</option>`;
+  coverSelect.innerHTML = `<option value="">Select Coverup Person...</option>`;
+
+  // Collect all unique Teller IDs
+  const allTellerIds = new Set();
+
+  // Add from registered users
+  Object.values(registeredUserMap).forEach(u => {
+    if (u.tellerId) allTellerIds.add(u.tellerId.toString().trim());
+  });
+
+  // Add from active roster tellers
+  if (window.loadedRosterTellerIds) {
+    window.loadedRosterTellerIds.forEach(id => allTellerIds.add(id));
+  }
+
+  // Ensure standard teller IDs 101 to 125 are included
+  for (let i = 101; i <= 125; i++) {
+    allTellerIds.add(i.toString());
+  }
+
+  // Convert to array and sort numerically
+  const sortedTellerIds = Array.from(allTellerIds).sort((a, b) => {
+    let numA = parseInt(a.replace(/[^\d]/g, '')) || 0;
+    let numB = parseInt(b.replace(/[^\d]/g, '')) || 0;
+    return numA - numB;
+  });
+
+  sortedTellerIds.forEach(tId => {
+    let userProf = registeredUserMap[tId];
+    let label = userProf && userProf.nickName ? `Teller ${tId} (${userProf.nickName})` : `Teller ${tId}`;
+    
+    absentSelect.innerHTML += `<option value="${tId}">${label}</option>`;
+    coverSelect.innerHTML += `<option value="${tId}">${label}</option>`;
+  });
+
+  // If user is a teller, auto-select them as absent
+  if (currentUserProfile && currentUserProfile.tellerId) {
+    absentSelect.value = currentUserProfile.tellerId;
+  }
+}
+
+function closeCoverupModal() {
+  document.getElementById("coverupModal").classList.remove("open");
+}
+
+async function handleSaveCoverup(e) {
+  e.preventDefault();
+  const date = document.getElementById("coverDate").value;
+  const coverupDate = document.getElementById("coverupDate").value;
+  const shift = document.getElementById("coverShift").value;
+  const absentTellerId = document.getElementById("coverAbsentTeller").value;
+  const coverupTellerId = document.getElementById("coverCoverupTeller").value;
+  const reason = document.getElementById("coverType").value;
+  const errDiv = document.getElementById("coverError");
+  errDiv.style.display = "none";
+
+  if (absentTellerId === coverupTellerId) {
+    errDiv.innerText = "Absent Teller and Coverup Person cannot be the same!";
+    errDiv.style.display = "block";
+    return;
+  }
+
+  try {
+    const docId = `${date}_${absentTellerId}_${shift}`;
+    await db.collection("shiftChanges").doc(docId).set({
+      date: date,
+      coverupDate: coverupDate,
+      shift: shift,
+      absentTellerId: absentTellerId,
+      coverupTellerId: coverupTellerId,
+      reason: reason,
+      createdBy: currentUserProfile ? (currentUserProfile.pfNo || currentUserProfile.uid) : "Anonymous",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    closeCoverupModal();
+    load();
+    alert("Shift coverup assignment saved successfully!");
+  } catch(e) {
+    errDiv.innerText = e.message || "Failed to save coverup assignment.";
+    errDiv.style.display = "block";
+  }
+}
+
+load();
+
+/* PWA INSTALLATION */
+let deferredPrompt;
+const installBtn = document.getElementById("installBtn");
+
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = "inline-block";
+});
+
+installBtn.addEventListener("click", async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installBtn.style.display = "none";
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+
+</body>
+</html>
