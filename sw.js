@@ -1,17 +1,20 @@
-const CACHE="roster-v1";
+const CACHE_NAME = 'roster-v1';
+const urlsToCache = [
+  './daily_roster.html',
+  './icon-512.png',
+  './manifest.json'
+];
 
-self.addEventListener("install",e=>{
- e.waitUntil(
-  caches.open(CACHE).then(c=>c.addAll([
-   "./",
-   "./daily_roster.html",
-   "./manifest.json"
-  ]))
- );
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
 });
 
-self.addEventListener("fetch",e=>{
- e.respondWith(
-  caches.match(e.request).then(r=>r||fetch(e.request))
- );
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => response || fetch(event.request))
+  );
 });
